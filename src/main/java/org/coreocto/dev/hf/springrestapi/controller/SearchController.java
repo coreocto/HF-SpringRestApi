@@ -56,12 +56,8 @@ public class SearchController {
                 response.setStatus(AppConstants.STATUS_ERR);
                 LOGGER.error(msg);
             } else {
-                SqlRowSet result = jdbcTemplate.queryForRowSet("select cdocid, cft, cfeiv from tdocuments t where exists(select 1 from tdocument_indexes t2 where t.cdocid = t2.cdocid and H(?,R(corder))||R(corder) = ctoken)", new PreparedStatementSetter() {
-                    @Override
-                    public void setValues(PreparedStatement ps) throws SQLException {
-                        ps.setString(1, q);
-                    }
-                });
+                SqlRowSet result = jdbcTemplate.queryForRowSet("select cdocid, cft, cfeiv from tdocuments t where exists(select 1 from tdocument_indexes t2 where t.cdocid = t2.cdocid and H(?,R(corder))||R(corder) = ctoken)", new String[]{q});
+                //queryForRowSet does not support PreparedStatementSetter, don't use it here
 
                 while (result.next()) {
                     String docId = result.getString(1);
@@ -133,14 +129,8 @@ public class SearchController {
 
             Map<String, DocInfo> docTypeLookup = new HashMap<>();
 
-            SqlRowSet rs = jdbcTemplate.queryForRowSet("select cdocid, cft, cfeiv from tdocuments d where exists(select 1 from tdoc_term_freq dtf where d.cdocid = dtf.cdocid and dtf.cword in (" + placeHolders + "))", new PreparedStatementSetter() {
-                @Override
-                public void setValues(PreparedStatement ps) throws SQLException {
-                    for (int i = 1; i <= numOfQueryTerms; i++) {
-                        ps.setString(i, qValues[i - 1]);
-                    }
-                }
-            });
+            //queryForRowSet does not support PreparedStatementSetter, don't use it here
+            SqlRowSet rs = jdbcTemplate.queryForRowSet("select cdocid, cft, cfeiv from tdocuments d where exists(select 1 from tdoc_term_freq dtf where d.cdocid = dtf.cdocid and dtf.cword in (" + placeHolders + "))", qValues);
 
             while (rs.next()) {
                 String docId = rs.getString(1);
@@ -168,24 +158,23 @@ public class SearchController {
             for (int i = 0; i < matchedDocCnt; i++) {
                 String curDocId = matchedDocIds.get(i);
 
+                //construct the param array
+                Object[] param = new Object[qValues.length + 1];
+                param[0] = curDocId;
+                for (int j = qValues.length - 1; j >= 0; j--) {
+                    param[j + 1] = qValues[j];
+                }
+                //end
+
                 SqlRowSet tmpRs = jdbcTemplate.queryForRowSet("select " +
                         "dtf.ccount, (select max(ccount) from tdoc_term_freq dtf2 where dtf.cword=dtf2.cword) max_ccount, " +
                         "cword " +
-                        "from tdoc_term_freq dtf where cdocid = ? and cword in (" + placeHolders + ")", new PreparedStatementSetter() {
-                    @Override
-                    public void setValues(PreparedStatement pStmnt) throws SQLException {
-                        pStmnt.setString(1, curDocId);
-
-                        for (int j = 1; j <= numOfQueryTerms; j++) {
-                            pStmnt.setString(j + 1, qValues[j - 1]);
-                        }
-                    }
-                });
+                        "from tdoc_term_freq dtf where cdocid = ? and cword in (" + placeHolders + ")", param);
 
                 while (tmpRs.next()) {
-                    int tf = rs.getInt(1);  //term freq.
-                    int mtf = rs.getInt(2); //max term freq.
-                    String word = rs.getString(3); //the encrypted keyword, not necessary
+                    int tf = tmpRs.getInt(1);  //term freq.
+                    int mtf = tmpRs.getInt(2); //max term freq.
+                    String word = tmpRs.getString(3); //the encrypted keyword, not necessary
                     double ntf = tf * 1.0 / mtf; //normalized term freq.
                     double tfidf = ntf * Math.log(docCnt * 1.0 / matchedDocCnt);
 
@@ -207,36 +196,31 @@ public class SearchController {
                     relScore.setScore(oldScore + (tfidf * queryTermScore));
                 }
                 //end
-
-                relScores.addAll(docScoreMap.values());
-
-                Collections.sort(relScores, new Comparator<RelScore>() {
-                    public int compare(RelScore o1, RelScore o2) {
-                        return (new Double(o2.getScore())).compareTo(o1.getScore());
-                    }
-                });
-
-                int minResult = Math.min(relScores.size(), MAX_RESULT);
-
-                for (int x = 0; x < minResult; x++) {
-                    String docId = relScores.get(x).getDocId();
-                    DocInfo tmp = docTypeLookup.get(docId);
-                    response.getFiles().add(tmp);
-                }
-
-                response.setCount(response.getFiles().size());
-                response.setTotalCount(relScores.size());
             }
-        } else if (st.equalsIgnoreCase(Constants.SSE_TYPE_CHLH + "")) {
-            SqlRowSet rs = jdbcTemplate.queryForRowSet("select cdocid, cft, cfeiv from tdocuments d where exists(select 1 from tchlh d2 where chlh_search(d2.cbf, ?) = ? and d.cdocid = d2.cdocid)", new PreparedStatementSetter() {
-                @Override
-                public void setValues(PreparedStatement pStmnt) throws SQLException {
-                    pStmnt.setString(1, q);
-                    pStmnt.setInt(2, 1);
+
+            relScores.addAll(docScoreMap.values());
+
+            Collections.sort(relScores, new Comparator<RelScore>() {
+                public int compare(RelScore o1, RelScore o2) {
+                    return (new Double(o2.getScore())).compareTo(o1.getScore());
                 }
             });
 
-            while (rs.next()){
+            int minResult = Math.min(relScores.size(), MAX_RESULT);
+
+            for (int x = 0; x < minResult; x++) {
+                String docId = relScores.get(x).getDocId();
+                DocInfo tmp = docTypeLookup.get(docId);
+                response.getFiles().add(tmp);
+            }
+
+            response.setCount(response.getFiles().size());
+            response.setTotalCount(relScores.size());
+
+        } else if (st.equalsIgnoreCase(Constants.SSE_TYPE_CHLH + "")) {
+            SqlRowSet rs = jdbcTemplate.queryForRowSet("select cdocid, cft, cfeiv from tdocuments d where exists(select 1 from tchlh d2 where chlh_search(d2.cbf, ?) = ? and d.cdocid = d2.cdocid)", q, 1);
+
+            while (rs.next()) {
                 DocInfo tmp = new DocInfo();
                 tmp.setName(rs.getString(1));
                 tmp.setType(rs.getInt(2));

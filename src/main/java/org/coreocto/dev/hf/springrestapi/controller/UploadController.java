@@ -34,7 +34,7 @@ public class UploadController {
     public BaseResponse upload
             (
                     @RequestParam("docId") String docId,
-                    @RequestParam("token") String tokenInJson,
+                    @RequestParam(value = "token", required = false) String tokenInJson,
                     @RequestParam("ft") String ft,
                     @RequestParam("st") String st,
                     @RequestParam("weiv") String weiv,
