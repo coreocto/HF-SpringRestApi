@@ -51,7 +51,9 @@ public class UploadController {
 //            st = Constants.SSE_TYPE_SUISE + "";
 //        }
 
-        if (docId == null || (st.equalsIgnoreCase(Constants.SSE_TYPE_SUISE + "") && tokenInJson == null)) {
+        if (docId == null || ((st.equals(Constants.SSE_TYPE_SUISE + "") ||
+                st.equals(AppConstants.SSE_TYPE_SUISE_2 + "") ||
+                st.equals(AppConstants.SSE_TYPE_SUISE_3 + "")) && tokenInJson == null)) {
             return response;
         }
 
