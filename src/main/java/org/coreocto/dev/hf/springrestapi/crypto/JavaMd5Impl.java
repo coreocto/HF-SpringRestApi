@@ -1,4 +1,4 @@
-package org.coreocto.dev.hf.springrestapi.util;
+package org.coreocto.dev.hf.springrestapi.crypto;
 
 import org.coreocto.dev.hf.commonlib.crypto.IHashFunc;
 
