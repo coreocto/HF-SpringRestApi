@@ -34,7 +34,7 @@ public class UploadController {
     public BaseResponse upload
             (
                     @RequestParam("docId") String docId,
-                    @RequestParam("token") String tokenInJson,
+                    @RequestParam(value = "token", required = false) String tokenInJson,
                     @RequestParam("ft") String ft,
                     @RequestParam("st") String st,
                     @RequestParam("weiv") String weiv,
@@ -51,7 +51,9 @@ public class UploadController {
 //            st = Constants.SSE_TYPE_SUISE + "";
 //        }
 
-        if (docId == null || (st.equalsIgnoreCase(Constants.SSE_TYPE_SUISE + "") && tokenInJson == null)) {
+        if (docId == null || ((st.equals(Constants.SSE_TYPE_SUISE + "") ||
+                st.equals(AppConstants.SSE_TYPE_SUISE_2 + "") ||
+                st.equals(AppConstants.SSE_TYPE_SUISE_3 + "")) && tokenInJson == null)) {
             return response;
         }
 
